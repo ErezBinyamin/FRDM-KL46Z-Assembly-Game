@@ -2,11 +2,11 @@
 Fun Text-based game written in Assembly for the FRDM-KL46Z board.  
 
 Think you know your ARM CPU instructions? Put you knowledge to the test by playing "The Ulimate Assembler"!  
-Basrd on a CPU instruction description or RTN enter the correct instruction to get points!  
+Based on a CPU instruction description or RTN, enter the correct instruction to get points!  
 Be careful though... the FRDM-KL46Z will be using it's PIT module to time you, and  
 if you run out of time you loose the game!  
 Have fun improving your familiarity with some CPU instructions, and achieve ranks ranging from  
-"Retake DSD I" to "Roy Melton" !
+"Retake DSD I" to "Dr. Roy Melton" !
  
  
 Set up:  
