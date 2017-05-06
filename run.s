@@ -2,8 +2,8 @@
 ;****************************************************************
 ;The Ulimate Assembler: Text based study game
 ;Displays question to user, and reads user input. Conditionaly awards points or removes "lives"
-;Name:  Erez Binyamin
-;Date:  9/26/2016
+;Name:  Erez Binyamin/Derek Freeman
+;Date:  05/02/2017
 ;Class:  CMPE-250
 ;Section:  3, Thursday, 2 PM
 ;---------------------------------------------------------------
@@ -20,6 +20,50 @@
             OPT  1   ;Turn on listing
 ;****************************************************************
 ;EQUates
+UART0_BDH_9600    EQU 0x01
+UART0_BDL_9600    EQU 0x38
+UART0_C1_8N1      EQU 0x00
+UART0_C2_T_R 	  EQU (UART0_C2_TE_MASK :OR: UART0_C2_RE_MASK )
+UART0_C3_NO_TXINV EQU 0x00
+UART0_C4_OSR_16   EQU 0x0F
+UART0_C4_NO_MATCH_OSR_16 EQU UART0_C4_OSR_16
+UART0_C5_NO_DMA_SSR_SYNC EQU 0x00
+UART0_S1_CLEAR_FLAGS EQU 0x1F
+UART0_S2_NO_RXINV_BRK10_NO_LBKDETECT_CLEAR_FLAGS EQU 0xC0
+
+PORT_PCR_SET_PTA1_UART0_RX EQU (PORT_PCR_ISF_MASK :OR: \
+								PORT_PCR_MUX_SELECT_2_MASK)
+PORT_PCR_SET_PTA2_UART0_TX EQU (PORT_PCR_ISF_MASK :OR: \
+								PORT_PCR_MUX_SELECT_2_MASK)
+SIM_SOPT2_UART0SRC_MCGPLLCLK EQU (1 << SIM_SOPT2_UART0SRC_SHIFT)
+SIM_SOPT2_UART0_MCGPLLCLK_DIV2 EQU \
+		(SIM_SOPT2_UART0SRC_MCGPLLCLK :OR: SIM_SOPT2_PLLFLLSEL_MASK)
+SIM_SOPT5_UART0_EXTERN_MASK_CLEAR EQU (SIM_SOPT5_UART0ODE_MASK :OR: \
+			SIM_SOPT5_UART0RXSRC_MASK :OR: SIM_SOPT5_UART0TXSRC_MASK)
+SIM_CGC6			EQU	SIM_SCGC6_PIT_MASK
+NVIC_ICPR_UART0_MASK  EQU  UART0_IRQ_MASK 
+UART0_IRQ_PRIORITY    EQU  3 
+NVIC_IPR_UART0_MASK   EQU  (3 << UART0_PRI_POS) 
+NVIC_IPR_UART0_PRI_3  EQU  (UART0_IRQ_PRIORITY << UART0_PRI_POS) 
+NVIC_ISER_UART0_MASK  EQU  UART0_IRQ_MASK 
+NVIC_ICER_PIT_MASK    EQU  PIT_IRQ_MASK
+NVIC_ICER_UART0_MASK  EQU  UART0_IRQ_MASK
+NVIC_ICPR_PIT_MASK    EQU  PIT_IRQ_MASK
+;NVIC_ICPR_UART0_MASK  EQU  UART0_IRQ_MASK	
+PIT_IRQ_PRIORITY      EQU  0
+NVIC_IPR_PIT_MASK     EQU  (3 << PIT_PRI_POS)
+NVIC_IPR_PIT_PRI_0    EQU  (PIT_IRQ_PRIORITY << UART0_PRI_POS)
+;UART0_IRQ_PRIORITY    EQU  3
+;NVIC_IPR_UART0_MASK   EQU  (3 << UART0_PRI_POS)
+;NVIC_IPR_UART0_PRI_3  EQU  (UART0_IRQ_PRIORITY << UART0_PRI_POS)
+NVIC_ISER_PIT_MASK    EQU  PIT_IRQ_MASK
+;NVIC_ISER_UART0_MASK  EQU  UART0_IRQ_MASK	
+UART0_C2_T_RI  		  EQU  (UART0_C2_RIE_MASK :OR: UART0_C2_T_R) 
+UART0_C2_TI_RI        EQU  (UART0_C2_TIE_MASK :OR: UART0_C2_T_RI)    
+PIT_MCR_EN_FRZ  	  EQU  PIT_MCR_FRZ_MASK
+PIT_LDVAL_10ms  	  EQU  239999
+PIT_TCTRL_CH_IE  	  EQU  (PIT_TCTRL_TIE_MASK :OR: PIT_TCTRL_TEN_MASK)	
+PIT_IRQ_PRI  		  EQU  0 	
 ;****************************************************************
 ; EQUates for the LEDS
 ;Port D
@@ -37,8 +81,8 @@ POS_GREEN       EQU  5
 LED_RED_MASK    EQU  (1 << POS_RED)
 LED_GREEN_MASK  EQU  (1 << POS_GREEN)
 
-LED_PORTD_MASK  EQU  LED_GREEN MASK
-LED_PORTE_MASK  EQU  LED_RED_MASK  
+LED_PORTD_MASK  EQU  LED_GREEN_MASK
+LED_PORTE_MASK  EQU  LED_RED_MASK 
 ;****************************************************************
 ;EQUates continue below
 ;****************************************************************
@@ -67,8 +111,8 @@ MainLoop
 LED_IRQ
 	PUSH	{R0 - R3, LR}
 ;enable clock for PORT D and E modules
-	LDR     R1,=SIM_SCGC5
-	LDR     R2,=(SIM_SCGC5_PORTD_MASK :OR: \SIM_SCGC5_PORTE_MASK)
+	LDR     R1, =SIM_SCGC5
+	LDR     R2, =(SIM_SCGC5_PORTD_MASK :OR: SIM_SCGC5_PORTE_MASK)
 	LDR     R3,[R1,#0]
 	ORRS    R3,R3,R2
 	STR     R3,[R1,#0]
@@ -90,27 +134,87 @@ LED_IRQ
 	LDR  	R2,=LED_PORTE_MASK
 	STR  	R2,[R1,#GPIO_PDDR_OFFSET]
 
+	;Turn on red LED
+	LDR  	R1, =FGPIOE_BASE
+	LDR  	R2, =LED_RED_MASK
+	STR  	R2, [R1,#GPIO_PCOR_OFFSET]
+	
+	;Turn on green LED
+	LDR 	R1, =FGPIOD_BASE
+	LDR  	R2, =LED_GREEN_MASK
+	STR  	R2,[R1,#GPIO_PCOR_OFFSET]	
+	
+	;Turn off red LED
+	LDR  	R1,=FGPIOE_BASE
+	LDR  	R2,=LED_RED_MASK
+	STR  	R2,[R1,#GPIO_PSOR_OFFSET]	
+	
+	;Turn off green LED
+	LDR  	R1,=FGPIOD_BASE
+	LDR  	R2,=LED_GREEN_MASK
+	STR 	R2,[R1,#GPIO_PSOR_OFFSET]
+		
+	POP		{R0 - R3, PC}
+;****************************************************************
+REDLED_OFF
+	PUSH	{R1 - R2, LR}
 ;Turn off red LED
 	LDR  	R1,=FGPIOE_BASE
 	LDR  	R2,=LED_RED_MASK
 	STR  	R2,[R1,#GPIO_PSOR_OFFSET]
-	
+	POP	{R1 - R2, PC}
+;****************************************************************	
+GREENLED_OFF	
+	PUSH	{R1 - R2, LR}
 ;Turn off green LED
 	LDR  	R1,=FGPIOD_BASE
 	LDR  	R2,=LED_GREEN_MASK
 	STR 	R2,[R1,#GPIO_PSOR_OFFSET]
-	
+	POP	{R1 - R2, PC}
+;****************************************************************	
+REDLED_ON	
+	PUSH	{R1 - R2, LR}
 ;Turn on red LED
-	LDR  	R1=FGPIOE_BASE
-	LDR  	R2=LED_RED_MASK
-	STR  	R2[R1#GPIO_PCOR_OFFSET]
-
+	LDR  	R1, =FGPIOE_BASE
+	LDR  	R2, =LED_RED_MASK
+	STR  	R2, [R1,#GPIO_PCOR_OFFSET]
+RedDone	
+	POP	{R1 - R2, PC}
+;****************************************************************
+GREENLED_ON
+	PUSH	{R1 - R2, LR}
 ;Turn on green LED
-	LDR 	R1=FGPIOD_BASE
-	LDR  	R2=LED_GREEN_MASK
-	STR  	R2[R1#GPIO_PCOR_OFFSET]	
-	
-	POP	R0 - R3, LR}
+	LDR 	R1, =FGPIOD_BASE
+	LDR  	R2, =LED_GREEN_MASK
+	STR  	R2,[R1,#GPIO_PCOR_OFFSET]
+GreenDone		
+	POP	{R1 - R2, PC}
+;****************************************************************
+SameString
+	PUSH	{R1 - R6, LR}
+	MOVS	R5, R0
+	MOVS	R6, R1
+	BL	 	LengthStringSB
+	MOVS	R3, R2
+	MOVS	R0, R1
+	BL	 	LengthStringSB
+	CMP		R2, R3
+	BNE		Not_Equal
+CompareLoop
+	SUBS	R2, R2, #1
+	LDRB	R3, [R5, R2]
+	LDRB	R4, [R6, R2]
+	CMP		R3, R4
+	BNE		Not_Equal
+	CMP		R2, #0
+	BNE		CompareLoop
+Equal	
+	MOVS	R0, #1
+	B		GoBack
+Not_Equal
+	MOVS	R0, #0
+GoBack
+	POP {R1 - R6, PC}
 ;****************************************************************
 Init_PIT_IRQ
 			
@@ -371,7 +475,7 @@ __Vectors
             DCD    Dummy_Handler      ;35:TPM2
             DCD    Dummy_Handler      ;36:RTC (alarm)
             DCD    Dummy_Handler      ;37:RTC (seconds)
-            DCD    PIT_ISR	     ;38:PIT (all IRQ sources)
+            DCD    PIT_ISR	      ;38:PIT (all IRQ sources)
             DCD    Dummy_Handler      ;39:I2S0
             DCD    Dummy_Handler      ;40:USB0
             DCD    Dummy_Handler      ;41:DAC0
