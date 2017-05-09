@@ -114,7 +114,7 @@ MAXVAL		EQU		32
 ;Program
 ;Linker requires Reset_Handler
             AREA    MyCode,CODE,READONLY
-            ENTRY
+            ;ENTRY
 			
 			EXPORT 	GetChar
 			EXPORT 	PutChar
@@ -124,8 +124,11 @@ MAXVAL		EQU		32
 			EXPORT 	SameStringSB
 
 			EXPORT 	Init_UART0_IRQ
+			EXPORT 	UART0_IRQHandler
+				
 			EXPORT 	Init_LED_IRQ
 			EXPORT 	Init_PIT_IRQ
+			EXPORT  PIT_IRQHandler
 
 			EXPORT 	PutNumHex
 			EXPORT 	PutNumUB
@@ -135,23 +138,31 @@ MAXVAL		EQU		32
 			EXPORT 	GREENLED_OFF
 			EXPORT 	GREENLED_ON
 			
-			EXPORT 	GetTime
 			EXPORT 	ClearTime
 			EXPORT 	StartTime
 			EXPORT 	StopTime
 			
-            EXPORT  Reset_Handler
-            IMPORT  Startup
-Reset_Handler
-main
+			EXPORT  CheckRecQ
+			EXPORT 	Enqueue
+			EXPORT 	Dequeue
+			EXPORT 	DIVU
+			EXPORT  LengthStringSB
+			EXPORT  PutNumU
+			EXPORT  InitQueue
+			
+            ;EXPORT  Reset_Handler
+			
+			;Exported Variable
+            EXPORT  Count
+;Reset_Handler
+;main
 ;---------------------------------------------------------------
 ;Mask interrupts
-            CPSID   I
+            ;CPSID   I
 ;KL46 system startup with 48-MHz system clock
-            BL      Startup
 ;---------------------------------------------------------------
 ;>>>>> begin main program code <<<<<
-MainLoop
+;MainLoop
 
 ;>>>>>   end main program code <<<<<
 ;Stay here
@@ -292,6 +303,7 @@ Init_PIT_IRQ
 ;	}
 ;	clear interrupt
 ;	return
+PIT_IRQHandler
 PIT_ISR
 			CPSID	I
 			PUSH	{LR}
@@ -321,11 +333,11 @@ Clr_PIT_intrpt
 ;@PARAM void
 ;@RETURN R0: int count
 ;Returns Sytem Time in R0
-GetTime
-	PUSH	{LR}
-	LDR		R0,=Count
-	LDR		R0,[R0,#0]
-	POP		{PC}
+; GetTime
+	; PUSH	{LR}
+	; LDR		R0,=Count
+	; LDR		R0,[R0,#0]
+	; POP		{PC}
 ;----------------------------------------------------------------
 ;@PARAM void
 ;@RETURN void
@@ -455,7 +467,7 @@ Init_UART0_IRQ
 				POP		{PC,R0-R7}
 ;---------------------------------------------------------------
 ;UART0 Interrupt Service Routine
-UART0_IRQ_HANDLER
+UART0_IRQHandler
 UART0_ISR
 			CPSID	I
 			PUSH	{LR}
@@ -524,6 +536,23 @@ InitQueue
 			STRB	R3,[R1,#NUM_ENQD]
 			
 			POP		{R0-R3,PC}
+;------------------------------------------------------------------------------------------------------------------
+;@RETRURN : BOOL (is recieve queue 1)
+CheckRecQ
+			PUSH	{R1-R2, LR}
+			LDR		R1,=RxQBuffer
+			LDRB	R1,[R1,#NUM_ENQD]
+	
+	;Check if RxQBuffer is empty
+			CMP		R1,#0	
+			BEQ		NoCharEnter
+	;Char entered
+			MOVS	R0,#1
+CheckRQdon
+			POP		{R1, PC}
+NoCharEnter
+			MOVS	R0,#0
+			B		CheckRQdon
 ;------------------------------------------------------------------------------------------------------------------
 ;Enqueue:
 ;Attempts to put a character in the queue whose queue record structure’s address is in R1—
@@ -694,7 +723,7 @@ EndGString
 PutStringSB		
 			PUSH	{LR}			;Save the return address for a function call
 			PUSH	{R0-R6}			;Save the Register contents of R0-R6
-			MOVS	R1,#MaxString	;Copies the value of MAX_STRING in equates used for the conditional statement
+			;MOVS	R1,#MaxString	;Copies the value of MAX_STRING in equates used for the conditional statement
 			MOVS	R2,R0			;Save memory location of String into R2
 			MOVS	R3,#0			;Initialize the counter and the index displacement to 0
 			MOVS	R4,#0			;Initialize the NULL character to be used for a conditional statement
@@ -718,30 +747,42 @@ PutReturn
 ;@PARAM R1: *StringB
 ;@RETURN R0: (boolean)if (StringA .equals (StringB))
 SameStringSB
-	PUSH	{R1 - R6, LR}
-	MOVS	R5, R0
-	MOVS	R6, R1
-	BL	 	LengthStringSB
-	MOVS	R3, R2
-	MOVS	R0, R1
-	BL	 	LengthStringSB
-	CMP		R2, R3
-	BNE		Not_Equal
-CompareLoop
-	SUBS	R2, R2, #1
-	LDRB	R3, [R5, R2]
-	LDRB	R4, [R6, R2]
-	CMP		R3, R4
-	BNE		Not_Equal
-	CMP		R2, #0
-	BNE		CompareLoop
-Equal	
-	MOVS	R0, #1
-	B		GoBack
-Not_Equal
-	MOVS	R0, #0
-GoBack
-	POP {R1 - R6, PC}
+	PUSH	{R1-R6, LR}
+
+;Protect Pointers
+	MOVS	R4,R0
+	MOVS	R5,R1
+	
+;Get Lengths
+	MOVS	R1,#MaxString
+	MOVS	R0,R4
+	BL 		LengthStringSB
+	MOVS 	R3,R2
+	
+	MOVS	R1,#MaxString
+	MOVS	R0,R5
+	BL 		LengthStringSB
+	
+;Compare Lengths
+	CMP		R2,R3
+	BNE		NotSame
+	
+SameStrLoop
+	SUBS	R2,R2,#1
+	LDRB	R0,[R4,R2]
+	LDRB	R1,[R5,R2]
+	CMP		R0,R1
+	BNE		NotSame
+	CMP		R2,#0
+	BNE		SameStrLoop
+	MOVS 	R0,#1
+	
+SameEnd
+	POP 	{R1-R6, PC}
+	
+NotSame
+	MOVS 	R0,#0
+	B		SameEnd
 ;------------------------------------------------------------------------------------------------------------------
 ;Preventing overrun of the buffer capacity specified in R1,
 ;this subroutine determines how many characters are in the null-terminated string in memory starting at
@@ -914,68 +955,6 @@ PutNumUB
             ALIGN
 ;>>>>>   end subroutine code <<<<<
 ;****************************************************************
-;Vector Table Mapped to Address 0 at Reset
-;Linker requires __Vectors to be exported
-            AREA    RESET, DATA, READONLY
-            EXPORT  __Vectors
-            EXPORT  __Vectors_End
-            EXPORT  __Vectors_Size
-            IMPORT  __initial_sp
-            IMPORT  Dummy_Handler
-__Vectors 
-                                      ;ARM core vectors
-            DCD    __initial_sp       ;00:end of stack
-            DCD    Reset_Handler      ;01:reset vector
-            DCD    Dummy_Handler      ;02:NMI
-            DCD    Dummy_Handler      ;03:hard fault
-            DCD    Dummy_Handler      ;04:(reserved)
-            DCD    Dummy_Handler      ;05:(reserved)
-            DCD    Dummy_Handler      ;06:(reserved)
-            DCD    Dummy_Handler      ;07:(reserved)
-            DCD    Dummy_Handler      ;08:(reserved)
-            DCD    Dummy_Handler      ;09:(reserved)
-            DCD    Dummy_Handler      ;10:(reserved)
-            DCD    Dummy_Handler      ;11:SVCall (supervisor call)
-            DCD    Dummy_Handler      ;12:(reserved)
-            DCD    Dummy_Handler      ;13:(reserved)
-            DCD    Dummy_Handler      ;14:PendableSrvReq (pendable request 
-                                      ;   for system service)
-            DCD    Dummy_Handler      ;15:SysTick (system tick timer)
-            DCD    Dummy_Handler      ;16:DMA channel 0 xfer complete/error
-            DCD    Dummy_Handler      ;17:DMA channel 1 xfer complete/error
-            DCD    Dummy_Handler      ;18:DMA channel 2 xfer complete/error
-            DCD    Dummy_Handler      ;19:DMA channel 3 xfer complete/error
-            DCD    Dummy_Handler      ;20:(reserved)
-            DCD    Dummy_Handler      ;21:command complete; read collision
-            DCD    Dummy_Handler      ;22:low-voltage detect;
-                                      ;   low-voltage warning
-            DCD    Dummy_Handler      ;23:low leakage wakeup
-            DCD    Dummy_Handler      ;24:I2C0
-            DCD    Dummy_Handler      ;25:I2C1
-            DCD    Dummy_Handler      ;26:SPI0 (all IRQ sources)
-            DCD    Dummy_Handler      ;27:SPI1 (all IRQ sources)
-            DCD    UART0_ISR	      ;28:UART0 (status; error)
-            DCD    Dummy_Handler      ;29:UART1 (status; error)
-            DCD    Dummy_Handler      ;30:UART2 (status; error)
-            DCD    Dummy_Handler      ;31:ADC0
-            DCD    Dummy_Handler      ;32:CMP0
-            DCD    Dummy_Handler      ;33:TPM0
-            DCD    Dummy_Handler      ;34:TPM1
-            DCD    Dummy_Handler      ;35:TPM2
-            DCD    Dummy_Handler      ;36:RTC (alarm)
-            DCD    Dummy_Handler      ;37:RTC (seconds)
-            DCD    PIT_ISR	      ;38:PIT (all IRQ sources)
-            DCD    Dummy_Handler      ;39:I2S0
-            DCD    Dummy_Handler      ;40:USB0
-            DCD    Dummy_Handler      ;41:DAC0
-            DCD    Dummy_Handler      ;42:TSI0
-            DCD    Dummy_Handler      ;43:MCG
-            DCD    Dummy_Handler      ;44:LPTMR0
-            DCD    Dummy_Handler      ;45:Segment LCD
-            DCD    Dummy_Handler      ;46:PORTA pin detect
-            DCD    Dummy_Handler      ;47:PORTC and PORTD pin detect
-__Vectors_End
-__Vectors_Size  EQU     __Vectors_End - __Vectors
             ALIGN
 ;****************************************************************
 ;Constants

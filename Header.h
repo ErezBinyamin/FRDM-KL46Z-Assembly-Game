@@ -7,8 +7,8 @@
 /* Section:  All sections                                            */
 /*********************************************************************/
 
-/* Data Types */
-typedef char *String;	
+//SysTime
+extern int Count;
 
 /* assembly language subroutines */
 char GetChar (void);
@@ -20,7 +20,6 @@ int SameStringSB (char String_A[], char String_B[]);
 void Init_UART0_IRQ (void);
 void Init_LED_IRQ (void);
 void Init_PIT_IRQ (void);
-void Startup (void);
 
 void PutNumHex (int);
 void PutNumUB (char);
@@ -30,7 +29,7 @@ void REDLED_ON (void);
 void GREENLED_OFF (void);
 void GREENLED_ON (void);
 
-int GetTime (void);
 void ClearTime (void);
 void StartTime (void);
 void StopTime (void);
+int CheckRecQ (void);
